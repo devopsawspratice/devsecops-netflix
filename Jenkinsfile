@@ -2,21 +2,23 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = "veeradockerhub/netflix-clone"
-        KUBE_CONFIG = "/root/.kube/config" // path to your kubeconfig
+        DOCKER_HUB_USER = "veeradockerhub"
+        DOCKER_HUB_PASS = credentials('docker-hub-pass') // Your Jenkins Docker Hub password stored as credential
+        IMAGE_NAME = "netflix-clone"
+        K8S_DIR = "Kubernetes"
     }
 
     stages {
 
-        stage('Clean Workspace') {
+        stage('Checkout Code') {
             steps {
-                cleanWs()
+                git url: 'https://github.com/veeraprasadkoduri-cmd/devsecops-netflix.git', branch: 'main'
             }
         }
 
-        stage('Clone Code') {
+        stage('Clean Workspace') {
             steps {
-                git branch: 'main', url: 'https://github.com/veeraprasadkoduri-cmd/devsecops-netflix.git'
+                cleanWs()
             }
         }
 
@@ -26,20 +28,22 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Build Project & Docker Image') {
             steps {
-                sh 'docker build -t $DOCKER_IMAGE:latest .'
+                // Build the project
+                sh 'yarn build'
+
+                // Build Docker image
+                sh "docker build -t $DOCKER_HUB_USER/$IMAGE_NAME:latest ."
             }
         }
 
         stage('Docker Login & Push') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'docker-creds', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                withCredentials([string(credentialsId: 'docker-hub-pass', variable: 'PASS')]) {
                     sh '''
-                    rm -rf ~/.docker
-                    echo "$PASS" | docker login -u "$USER" --password-stdin
-                    docker image prune -af   # delete old images
-                    docker push $DOCKER_IMAGE:latest
+                    echo $PASS | docker login -u veeradockerhub --password-stdin
+                    docker push veeradockerhub/netflix-clone:latest
                     '''
                 }
             }
@@ -47,31 +51,33 @@ pipeline {
 
         stage('Deploy to Kubernetes') {
             steps {
-                // Ensure kubeconfig is available
-                sh 'export KUBECONFIG=$KUBE_CONFIG'
-
-                // Apply deployment and service
-                sh '''
-                kubectl apply -f Kubernetes/deployment.yml
-                kubectl apply -f Kubernetes/service.yml
-                kubectl rollout status deployment/netflix-app
-                '''
+                script {
+                    // Apply Kubernetes YAMLs
+                    if (fileExists(K8S_DIR)) {
+                        sh """
+                        kubectl apply -f $K8S_DIR/
+                        kubectl rollout status deployment/netflix-app
+                        """
+                    } else {
+                        error "Kubernetes folder not found!"
+                    }
+                }
             }
         }
 
         stage('Verify Deployment') {
             steps {
-                sh '''
+                sh """
                 kubectl get pods
                 kubectl get svc
-                '''
+                """
             }
         }
     }
 
     post {
         success {
-            echo "✅ Full CI/CD Pipeline Success! Your app should be live with LoadBalancer."
+            echo "✅ Pipeline Completed Successfully!"
         }
         failure {
             echo "❌ Pipeline Failed!"
