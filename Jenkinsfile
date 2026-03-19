@@ -2,17 +2,15 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_HUB_USER = "veeradockerhub"
-        DOCKER_HUB_PASS = credentials('docker-hub-pass') // Your Jenkins Docker Hub password stored as credential
-        IMAGE_NAME = "netflix-clone"
-        K8S_DIR = "Kubernetes"
+        IMAGE_NAME = 'veeradockerhub/netflix-clone:latest'
+        DOCKER_CRED = credentials('docker-hub-pass') // Docker Hub credentials
+        KUBE_CONFIG = '/root/.kube/config'          // Path to kubeconfig on Jenkins agent
     }
 
     stages {
-
         stage('Checkout Code') {
             steps {
-                git url: 'https://github.com/veeraprasadkoduri-cmd/devsecops-netflix.git', branch: 'main'
+                checkout scm
             }
         }
 
@@ -28,23 +26,27 @@ pipeline {
             }
         }
 
-        stage('Build Project & Docker Image') {
+        stage('Build Project') {
             steps {
-                // Build the project
                 sh 'yarn build'
+            }
+        }
 
-                // Build Docker image
-                sh "docker build -t $DOCKER_HUB_USER/$IMAGE_NAME:latest ."
+        stage('Build Docker Image') {
+            steps {
+                sh "docker build -t ${IMAGE_NAME} ."
             }
         }
 
         stage('Docker Login & Push') {
             steps {
-                withCredentials([string(credentialsId: 'docker-hub-pass', variable: 'PASS')]) {
-                    sh '''
-                    echo $PASS | docker login -u veeradockerhub --password-stdin
-                    docker push veeradockerhub/netflix-clone:latest
-                    '''
+                withCredentials([usernamePassword(credentialsId: 'docker-hub-pass', 
+                                                 passwordVariable: 'PASS', 
+                                                 usernameVariable: 'USER')]) {
+                    sh """
+                        echo $PASS | docker login -u $USER --password-stdin
+                        docker push ${IMAGE_NAME}
+                    """
                 }
             }
         }
@@ -52,35 +54,36 @@ pipeline {
         stage('Deploy to Kubernetes') {
             steps {
                 script {
-                    // Apply Kubernetes YAMLs
-                    if (fileExists(K8S_DIR)) {
-                        sh """
-                        kubectl apply -f $K8S_DIR/
-                        kubectl rollout status deployment/netflix-app
-                        """
-                    } else {
-                        error "Kubernetes folder not found!"
-                    }
+                    // Set kubeconfig for kubectl
+                    env.KUBECONFIG = "${KUBE_CONFIG}"
+
+                    // Deploy manifests
+                    sh '''
+                        kubectl apply -f Kubernetes/ --validate=false
+                        
+                        # Wait for deployment rollout
+                        kubectl rollout status deployment/netflix-app --timeout=120s
+                    '''
                 }
             }
         }
 
         stage('Verify Deployment') {
             steps {
-                sh """
-                kubectl get pods
-                kubectl get svc
-                """
+                sh '''
+                    kubectl get pods
+                    kubectl get svc
+                '''
             }
         }
     }
 
     post {
         success {
-            echo "✅ Pipeline Completed Successfully!"
+            echo "✅ Pipeline completed successfully!"
         }
         failure {
-            echo "❌ Pipeline Failed!"
+            echo "❌ Pipeline failed!"
         }
     }
 }
