@@ -2,17 +2,17 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_HUB_USER = 'veeradockerhub'
-        DOCKER_HUB_PASS = credentials('docker-hub-pass') // Replace with your Jenkins secret ID
+        DOCKER_HUB = 'veeradockerhub'
         IMAGE_NAME = 'netflix-clone'
-        K8S_DEPLOYMENT = 'k8s/deployment.yaml'
-        K8S_SERVICE = 'k8s/service.yaml'
+        IMAGE_TAG  = 'latest'
+        KUBE_DEPLOY_PATH = 'k8s/deployment.yaml'
+        KUBE_SERVICE_PATH = 'k8s/service.yaml'
     }
 
     stages {
         stage('Checkout Code') {
             steps {
-                git branch: 'main', url: 'https://github.com/veeraprasadkoduri-cmd/devsecops-netflix.git'
+                git url: 'https://github.com/veeraprasadkoduri-cmd/devsecops-netflix.git', branch: 'main'
             }
         }
 
@@ -24,38 +24,38 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh """
-                   docker build -t $DOCKER_HUB_USER/$IMAGE_NAME:latest .
-                """
+                sh "docker build -t ${DOCKER_HUB}/${IMAGE_NAME}:${IMAGE_TAG} ."
             }
         }
 
         stage('Docker Login & Push') {
             steps {
-                withCredentials([string(credentialsId: 'docker-hub-pass', variable: 'PASS')]) {
-                    sh """
-                        echo $PASS | docker login -u $DOCKER_HUB_USER --password-stdin
-                        docker push $DOCKER_HUB_USER/$IMAGE_NAME:latest
-                    """
+                script {
+                    if (credentials('docker-hub-pass')) {
+                        withCredentials([usernamePassword(credentialsId: 'docker-hub-pass', 
+                                                          usernameVariable: 'DOCKER_USER', 
+                                                          passwordVariable: 'DOCKER_PASS')]) {
+                            sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
+                            sh "docker push ${DOCKER_HUB}/${IMAGE_NAME}:${IMAGE_TAG}"
+                        }
+                    } else {
+                        echo "⚠️ Docker Hub credentials not found. Skipping push."
+                    }
                 }
             }
         }
 
         stage('Deploy to Kubernetes') {
             steps {
-                sh """
-                   kubectl apply -f $K8S_DEPLOYMENT
-                   kubectl apply -f $K8S_SERVICE
-                """
+                sh "kubectl apply -f ${KUBE_DEPLOY_PATH}"
+                sh "kubectl apply -f ${KUBE_SERVICE_PATH}"
             }
         }
 
         stage('Verify Deployment') {
             steps {
-                sh """
-                   kubectl get pods
-                   kubectl get svc
-                """
+                sh "kubectl get pods -o wide"
+                sh "kubectl get svc -o wide"
             }
         }
     }
