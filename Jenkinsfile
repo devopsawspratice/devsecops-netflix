@@ -30,30 +30,37 @@ pipeline {
 
         stage('Docker Login & Push') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'docker-hub-pass', 
-                                                  usernameVariable: 'DOCKER_USER', 
-                                                  passwordVariable: 'DOCKER_PASS')]) {
-                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
-                    sh "docker push ${DOCKER_HUB}/${IMAGE_NAME}:${IMAGE_TAG}"
+                withCredentials([usernamePassword(
+                    credentialsId: 'docker-creds',  // <- Corrected ID
+                    usernameVariable: 'DOCKER_USER', 
+                    passwordVariable: 'DOCKER_PASS')]) {
+                    
+                    sh '''
+                        echo "Logging into Docker Hub..."
+                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                        docker push ${DOCKER_HUB}/${IMAGE_NAME}:${IMAGE_TAG}
+                    '''
                 }
             }
         }
 
         stage('Deploy to Kubernetes') {
             steps {
-                sh "kubectl apply -f ${KUBE_DEPLOY_PATH}"
-                sh "kubectl apply -f ${KUBE_SERVICE_PATH}"
+                sh '''
+                    kubectl apply -f ${KUBE_DEPLOY_PATH}
+                    kubectl apply -f ${KUBE_SERVICE_PATH}
+                '''
             }
         }
 
         stage('Verify Deployment') {
             steps {
-                sh """
-                echo 'Waiting for pods to be ready...'
-                kubectl rollout status deployment/netflix-app --timeout=120s
-                kubectl get pods -o wide
-                kubectl get svc -o wide
-                """
+                sh '''
+                    echo 'Waiting for pods to be ready...'
+                    kubectl rollout status deployment/netflix-app --timeout=120s
+                    kubectl get pods -o wide
+                    kubectl get svc -o wide
+                '''
             }
         }
     }
@@ -67,6 +74,3 @@ pipeline {
         }
     }
 }
-
-
-what is the out put
