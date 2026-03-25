@@ -14,7 +14,7 @@ pipeline {
     stages {
         stage('Checkout Code') {
             steps {
-                git url: 'https://github.com/veeraprasadkoduri-cmd/devsecops-netflix.git', branch: 'main'
+                git url: 'https://github.com/devopsawspratice/devsecops-netflix.git', branch: 'main'
             }
         }
 
