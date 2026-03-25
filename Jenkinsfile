@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_HUB = 'awsdevopspratice'
+        DOCKER_HUB = 'devopsawspratice'
         IMAGE_NAME = 'netflix-clone'
         IMAGE_TAG  = 'latest'
         KUBE_DEPLOY_PATH = 'Kubernetes/deployment.yml'
