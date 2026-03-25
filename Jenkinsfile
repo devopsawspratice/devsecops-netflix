@@ -2,13 +2,13 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_HUB = 'veeradockerhub'
+        DOCKER_HUB = 'awsdevopspratice'
         IMAGE_NAME = 'netflix-clone'
         IMAGE_TAG  = 'latest'
         KUBE_DEPLOY_PATH = 'Kubernetes/deployment.yml'
         KUBE_SERVICE_PATH = 'Kubernetes/service.yml'
         KUBECONFIG_PATH = '/var/lib/jenkins/.kube/config'  // Explicit kubeconfig
-        RECIPIENTS = 'veeraprasad.koduri@gmail.com'
+        RECIPIENTS = 'sharan0434@gmail.com'
     }
 
     stages {
